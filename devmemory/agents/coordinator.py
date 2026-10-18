@@ -53,6 +53,7 @@ class AgentCoordinator:
         user_message: str,
         project_name: str = "Job Portal",
         session_name: str = "Current Session",
+        conversation_context: str = "",
     ) -> Dict[str, Any]:
         """
         Orchestrates user requests:
@@ -60,6 +61,19 @@ class AgentCoordinator:
         2. Checks if it's new information to remember -> stores via Memory Agent.
         3. Checks if it requires a multi-agent task execution and handoff.
         """
+        plan = [
+            {"step": "Understand the request", "status": "completed"},
+            {"step": "Extract and store new project knowledge", "status": "skipped"},
+            {"step": "Retrieve relevant graph memories", "status": "pending"},
+            {"step": "Reason over evidence and respond", "status": "pending"},
+            {"step": "Evaluate answer grounding", "status": "pending"},
+        ]
+        tools_used: List[Dict[str, str]] = []
+        self.log_activity(
+            "Coordinator",
+            "Plan Created",
+            "Understand the request, check for knowledge to save, retrieve graph evidence, answer, and evaluate grounding.",
+        )
         self.log_activity("Coordinator", "Received Message", f'"{user_message}"')
 
         # Check for knowledge extraction (e.g. "We fixed X by Y" or "Decided to use...")
@@ -67,6 +81,14 @@ class AgentCoordinator:
             user_message,
             project_default=project_name,
             session_default=session_name,
+        )
+        plan[1]["status"] = "completed" if extracted.get("stored") else "skipped"
+        tools_used.append(
+            {
+                "name": "MemoryAgent.extract_from_conversation",
+                "purpose": "Detect and persist a bug fix or architectural decision.",
+                "status": "stored" if extracted.get("stored") else "no_facts_detected",
+            }
         )
         if extracted.get("stored"):
             self.log_activity(
@@ -81,17 +103,69 @@ class AgentCoordinator:
             "Graph Memory Retrieval",
             f"Querying FalkorDB for connected entities: '{user_message}'",
         )
+        plan[2]["status"] = "in_progress"
         agent_resp: AgentResponse = self.task_agent.process_query(
             question=user_message,
             project_name=project_name,
+            conversation_context=conversation_context,
+        )
+        if extracted.get("stored") and extracted.get("issue") and extracted.get("fix"):
+            agent_resp = agent_resp.model_copy(
+                update={
+                    "answer": (
+                        f"Saved to graph memory for **{project_name}**: "
+                        f"**{extracted['issue']}** was resolved by **{extracted['fix']}**. "
+                        f"Recorded in **{session_name}**. You can ask about this fix in a later chat."
+                    )
+                }
+            )
+        plan[2]["status"] = "completed"
+        plan[3]["status"] = "completed"
+        tools_used.append(
+            {
+                "name": "MemoryStore.retrieve_context_with_evidence",
+                "purpose": "Retrieve project incidents, decisions, and provenance from the active graph space.",
+                "status": f"{len(agent_resp.retrieved_records)} records retrieved",
+            }
+        )
+
+        has_evidence = bool(agent_resp.evidence)
+        has_answer = bool(agent_resp.answer.strip())
+        evaluation_passed = has_evidence or bool(extracted.get("stored"))
+        evaluation = {
+            "passed": evaluation_passed,
+            "answer_generated": has_answer,
+            "answer_grounded": has_evidence,
+            "memory_saved": bool(extracted.get("stored")),
+            "feedback": (
+                "The answer is supported by retrieved project memory."
+                if has_evidence
+                else (
+                    "New project knowledge was saved; no separate prior evidence was needed."
+                    if extracted.get("stored")
+                    else "No matching evidence was found. The response explains this limitation and suggests saving a memory."
+                )
+            ),
+        }
+        plan[4]["status"] = "completed"
+        self.log_activity(
+            "Feedback & Evaluation",
+            "Answer Grounding Checked",
+            evaluation["feedback"],
         )
 
         return {
             "response": agent_resp.answer,
+            "answer": agent_resp.answer,
             "evidence": [e.model_dump() for e in agent_resp.evidence],
             "retrieved_records": agent_resp.retrieved_records,
             "confidence": agent_resp.confidence,
             "backend_mode": self.memory_store.mode,
+            "plan": plan,
+            "tools_used": tools_used,
+            "evaluation": evaluation,
+            "reasoning_mode": agent_resp.reasoning_mode,
+            "reasoning_warning": agent_resp.reasoning_warning,
             "activity_logs": list(self.activity_logs[-10:]),
         }
 

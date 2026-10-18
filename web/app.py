@@ -19,7 +19,7 @@ from devmemory.agents.task_agent import TaskAgent
 from devmemory.memory import MemoryStore as DevMemoryStore
 
 app = FastAPI(
-    title="DevMemory AI & MediMemory AI — Persistent Graph Teammate",
+    title="DevMemory AI — Persistent Graph Teammate",
     description="FalkorDB Track 2 Hackathon Project: Multi-Agent Persistent Graph Memory",
     version="1.0.0",
 )
@@ -45,31 +45,62 @@ orchestrator = MediMemoryOrchestrator(graph_store=graph_store)
 dev_store = DevMemoryStore(storage_file=DEVMEMORY_STORAGE, use_local_fallback=True)
 dev_coordinator = AgentCoordinator(memory_store=dev_store)
 
-# Seed initial DevMemory if empty
-if not dev_store.search("Vite failed to start"):
-    dev_store.record_project_memory(
-        project="Job Portal",
-        issue="Vite failed to start",
-        fix="Stop conflicting background process on port 5173",
-        session="October 12",
-        evidence="Port 5173 was locked by a stale node.js background task.",
-    )
-    dev_mem_agent = MemoryAgent(dev_store)
-    dev_mem_agent.record_architectural_decision(
+# Always ensure demo seed data exists in the 'default' space
+_current_space = dev_store.active_space
+dev_store.switch_space("default")
+_default_demo_incidents = (
+    (
+        "Vite failed to start",
+        "Stop conflicting background process on port 5173",
+        "October 12",
+        "Port 5173 was locked by a stale node.js background task.",
+    ),
+    (
+        "CSS styles not loading in production build",
+        "Added postcss and autoprefixer to vite.config.js build plugins",
+        "October 14",
+        "Missing postcss config caused Tailwind purge to strip all classes.",
+    ),
+    (
+        "API calls failing with CORS error on deployment",
+        "Set VITE_API_URL env variable and added CORS headers in FastAPI backend",
+        "October 15",
+        "Frontend was calling localhost:8000 instead of the deployed API URL.",
+    ),
+)
+for _issue, _fix, _session, _evidence in _default_demo_incidents:
+    if not dev_store.search(_issue):
+        dev_store.record_project_memory(
+            project="Job Portal",
+            issue=_issue,
+            fix=_fix,
+            session=_session,
+            evidence=_evidence,
+        )
+
+_mem_agent = MemoryAgent(dev_store)
+_existing_decisions = {
+    decision.get("title") for decision in dev_store.get_decisions("Job Portal")
+}
+if "Use Webpack Bundler" not in _existing_decisions:
+    _mem_agent.record_architectural_decision(
         project="Job Portal",
         title="Use Webpack Bundler",
         rationale="Initial legacy bundler in 2021",
         session="Legacy Setup",
         date="2021-06-10",
     )
-    dev_mem_agent.record_architectural_decision(
+if "Use Vite Bundler" not in _existing_decisions:
+    _mem_agent.record_architectural_decision(
         project="Job Portal",
         title="Use Vite Bundler",
-        rationale="Instant HMR and native ESM tooling",
+        rationale="Instant HMR and native ESM tooling — replaces Webpack",
         session="October 12",
         supersedes_title="Use Webpack Bundler",
         date="2026-10-12",
     )
+# Restore whatever space was active before
+dev_store.switch_space(_current_space)
 
 
 # Mount static files
@@ -258,6 +289,7 @@ class DevChatRequest(BaseModel):
     message: str
     project: str = "Job Portal"
     session: str = "October 18 Session"
+    conversation_id: Optional[str] = None
 
 
 class DevWorkflowRequest(BaseModel):
@@ -277,11 +309,76 @@ async def serve_devmemory():
 @app.post("/api/devmemory/chat")
 async def devmemory_chat(req: DevChatRequest):
     """Processes developer questions or records fixes through DevMemory coordinator."""
+    active_space = dev_store.active_space
+    conversation_id = req.conversation_id
+    if conversation_id is None:
+        conversation = dev_store.create_chat_thread(req.project)
+        conversation_id = conversation["id"]
+    thread = dev_store.get_chat_thread(conversation_id)
+    if thread is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found in the active memory space.",
+        )
+    current_thread_context = "\n".join(
+        f"Earlier user message: {exchange.get('user_message', '')}\n"
+        f"Earlier assistant response: {exchange.get('assistant_response', '')[:500]}"
+        for exchange in thread["exchanges"][-5:]
+    )
+    shared_space_context = "\n".join(
+        f"Earlier saved conversation from {exchange.get('session') or 'a previous session'} "
+        f"(project: {exchange.get('project') or 'unspecified'}):\n"
+        f"User: {exchange.get('user_message', '')}\n"
+        f"Assistant: {exchange.get('assistant_response', '')[:500]}"
+        for exchange in dev_store.list_recent_chat_exchanges(
+            exclude_conversation_id=conversation_id,
+            limit=8,
+        )
+    )
+    conversation_context = "\n\n".join(
+        context for context in (current_thread_context, shared_space_context) if context
+    )
     result = dev_coordinator.handle_request(
         user_message=req.message,
         project_name=req.project,
         session_name=req.session,
+        conversation_context=conversation_context,
     )
+
+    # If active space has no relevant memory, transparently search the default space
+    answer = result.get("response", "")
+    if "could not find matching memories" in answer.lower():
+        _saved_space = dev_store.active_space
+        if _saved_space != "default":
+            try:
+                dev_store.switch_space("default")
+                fallback_result = dev_coordinator.handle_request(
+                    user_message=req.message,
+                    project_name=req.project,
+                    session_name=req.session,
+                    conversation_context=conversation_context,
+                )
+            finally:
+                dev_store.switch_space(_saved_space)
+            fallback_answer = fallback_result.get("answer", "")
+            if "could not find matching memories" not in fallback_answer.lower():
+                fallback_result["space_note"] = (
+                    f"ℹ️ Retrieved from **default** space — current space '{_saved_space}' has no memories yet."
+                )
+                result = fallback_result
+
+    if dev_store.active_space != active_space:
+        dev_store.switch_space(active_space)
+    dev_store.record_conversation(
+        project_name=req.project,
+        user_message=req.message,
+        assistant_response=result.get("answer", result.get("response", "")),
+        session_name=req.session,
+        conversation_id=conversation_id,
+    )
+    result["conversation_id"] = conversation_id
+    result["active_space"] = active_space
+
     return result
 
 
@@ -324,8 +421,13 @@ async def get_devmemory_evidence(project: Optional[str] = None):
 
 @app.post("/api/devmemory/reset")
 async def reset_devmemory():
-    """Resets DevMemory graph."""
-    dev_store.reset(clear_persistent_file=True)
+    """Resets the active custom space, including its graph-backed conversations."""
+    if dev_store.active_space == "default":
+        raise HTTPException(
+            status_code=403,
+            detail="The default memory space and its chat history are protected from reset.",
+        )
+    dev_store.reset()
     dev_coordinator.activity_logs.clear()
     return {"status": "success", "message": "DevMemory reset"}
 
@@ -350,6 +452,18 @@ class SaveMemoryRequest(BaseModel):
     assigned_to: str = "task_agent"
 
 
+class SaveConversationRequest(BaseModel):
+    space_id: str
+    project: str
+    user_message: str
+    assistant_response: str
+    session: str = "Current Session"
+
+
+class CreateChatConversationRequest(BaseModel):
+    project: str = "Job Portal"
+
+
 @app.get("/api/devmemory/spaces")
 async def get_spaces():
     """Returns list of all available memory spaces."""
@@ -359,14 +473,48 @@ async def get_spaces():
     }
 
 
+@app.get("/api/devmemory/conversations")
+async def get_chat_conversations():
+    """Returns persistent chat conversations in the active memory space."""
+    return {
+        "active_space": dev_store.active_space,
+        "conversations": dev_store.list_chat_threads(),
+    }
+
+
+@app.post("/api/devmemory/conversations")
+async def create_chat_conversation(req: CreateChatConversationRequest):
+    """Creates a persistent conversation thread in the active memory space."""
+    project = req.project.strip()
+    if not project:
+        raise HTTPException(status_code=422, detail="A project is required.")
+    conversation = dev_store.create_chat_thread(project)
+    return {
+        "status": "success",
+        "conversation": conversation,
+        "active_space": dev_store.active_space,
+    }
+
+
+@app.get("/api/devmemory/conversations/{conversation_id}")
+async def get_chat_conversation(conversation_id: str):
+    """Returns a conversation and its saved exchanges from the active space."""
+    conversation = dev_store.get_chat_thread(conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"conversation": conversation, "active_space": dev_store.active_space}
+
+
 @app.post("/api/devmemory/spaces/create")
 async def create_new_space(req: CreateSpaceRequest):
     """Creates a new isolated memory space."""
+    existing_ids = {space["id"] for space in dev_store.list_spaces()}
     res = dev_store.create_space(req.name, req.description)
     dev_store.switch_space(req.name)
     return {
         "status": "success",
         "space": res,
+        "created": res["id"] not in existing_ids,
         "active_space": dev_store.active_space,
     }
 
@@ -379,6 +527,49 @@ async def switch_active_space(req: SwitchSpaceRequest):
         "status": "success",
         "active_space": active,
     }
+
+
+@app.delete("/api/devmemory/spaces/{space_id}")
+async def delete_memory_space(space_id: str):
+    """Deletes a user-created memory space and its graph data."""
+    if space_id == "default":
+        raise HTTPException(status_code=400, detail="The default memory space cannot be deleted.")
+    if not dev_store.delete_space(space_id):
+        raise HTTPException(status_code=404, detail="Memory space not found.")
+    return {
+        "status": "success",
+        "active_space": dev_store.active_space,
+    }
+
+
+@app.post("/api/devmemory/conversations/save")
+async def save_chat_conversation(req: SaveConversationRequest):
+    """Persists a user-selected chat exchange in its active memory space."""
+    if req.space_id != dev_store.active_space:
+        raise HTTPException(
+            status_code=409,
+            detail="The active memory space changed. Switch back and save the conversation again.",
+        )
+    user_message = req.user_message.strip()
+    assistant_response = req.assistant_response.strip()
+    project = req.project.strip()
+    if not user_message or not assistant_response or not project:
+        raise HTTPException(
+            status_code=422,
+            detail="A project, user message, and assistant response are required.",
+        )
+    record = dev_store.record_conversation(
+        project_name=project,
+        user_message=user_message,
+        assistant_response=assistant_response,
+        session_name=req.session.strip() or "Current Session",
+    )
+    dev_coordinator.log_activity(
+        "Memory Agent",
+        "Conversation Saved",
+        f"Saved a chat exchange for {project} in space {req.space_id}.",
+    )
+    return {"status": "success", "conversation": record, "active_space": dev_store.active_space}
 
 
 @app.post("/api/devmemory/save")
@@ -404,5 +595,3 @@ async def save_custom_memory_endpoint(req: SaveMemoryRequest):
         "data": result,
         "active_space": dev_store.active_space,
     }
-
-

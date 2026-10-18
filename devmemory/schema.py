@@ -132,3 +132,5 @@ class AgentResponse(BaseModel):
     handoffs: List[HandoffEvent] = Field(default_factory=list)
     confidence: float = 0.95
     backend_mode: str = "falkordb"
+    reasoning_mode: str = "deterministic"
+    reasoning_warning: Optional[str] = None

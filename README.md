@@ -83,6 +83,16 @@ flowchart TD
 | **4. Evidence & Traceability** | Every guidance point links directly to specific FalkorDB nodes and PubMed/Mayo citations. |
 | **5. Safety-Aware Guidance** | Hardcoded red flag triage, follow-up inquiry generation, and clear non-diagnostic framing. |
 
+## DevMemory AI Agent Capabilities
+
+The developer assistant applies the same five-part cycle to project knowledge:
+
+1. **Brain (LLM):** Uses the configured OpenAI model to reason over retrieved evidence; if the model call fails, it returns a deterministic evidence-based answer and reports the fallback.
+2. **Memory:** Extracts supported bug fixes and architectural decisions from messages and persists them in the active FalkorDB or local graph space.
+3. **Planning and reasoning:** Tracks request understanding, memory extraction, retrieval, evidence-based response, and grounding evaluation as explicit plan steps.
+4. **Tools and actions:** Reports the memory extraction and graph retrieval operations used for each chat request; the existing coordinator also supports multi-agent task handoffs.
+5. **Feedback and evaluation:** Returns whether evidence grounded the answer, whether new knowledge was saved, and a clear note when no matching memory was available.
+
 ---
 
 ## 🚀 Quick Start

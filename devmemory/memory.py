@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -65,7 +67,7 @@ class MemoryStore:
         self._connect()
 
         if self.auto_reset:
-            self.reset(clear_persistent_file=True)
+            self.reset(clear_persistent_file=True, allow_default=True)
 
     @property
     def mode(self) -> str:
@@ -174,10 +176,15 @@ class MemoryStore:
         s = self._slugify(space_name)
         if s == "default" or s not in self._spaces:
             return False
+        if self._mode == "falkordb" and self._db:
+            graph_id = f"{self.graph_name}_{s}"
+            graph = self._db.select_graph(graph_id)
+            graph.query("MATCH (n) DETACH DELETE n")
         del self._spaces[s]
         if self.active_space == s:
-            self.active_space = "default"
-        self._save_local_storage()
+            self.switch_space("default")
+        else:
+            self._save_local_storage()
         return True
 
     # -------------------------------------------------------------
@@ -269,13 +276,17 @@ class MemoryStore:
 
         self._ensure_space(self.active_space)
 
-    def reset(self, clear_persistent_file: bool = False) -> None:
-        """Clears memory graph for active space."""
+    def reset(
+        self,
+        clear_persistent_file: bool = False,
+        allow_default: bool = False,
+    ) -> None:
+        """Clears memory graph for active space, protecting default unless explicitly allowed."""
+        if self.active_space == "default" and not allow_default:
+            raise ValueError("The default memory space is protected from reset.")
+
         if self._mode == "falkordb" and self._graph:
-            try:
-                self._graph.query("MATCH (n) DETACH DELETE n")
-            except Exception:
-                pass
+            self._graph.query("MATCH (n) DETACH DELETE n")
 
         if self.active_space in self._spaces:
             self._spaces[self.active_space]["nodes"] = {}
@@ -285,12 +296,291 @@ class MemoryStore:
         if clear_persistent_file:
             path = Path(self.storage_file)
             if path.exists():
-                try:
-                    path.unlink()
-                except Exception:
-                    pass
+                path.unlink()
         else:
             self._save_local_storage()
+
+    def create_chat_thread(self, project_name: str = "Job Portal") -> Dict[str, str]:
+        """Creates a persistent chat thread node in the active graph space."""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        thread_id = f"chat_{uuid.uuid4().hex}"
+        thread = {
+            "id": thread_id,
+            "title": "New conversation",
+            "project": project_name,
+            "created_at": now,
+            "updated_at": now,
+            "message_count": "0",
+        }
+        project_id = f"project_{self._slugify(project_name)}"
+        self._add_node(project_id, "Project", {"name": project_name, "id": project_id})
+        self._add_node(thread_id, "ChatThread", thread)
+        self._add_edge(project_id, thread_id, "HAS_CONVERSATION")
+
+        if self._mode == "falkordb" and self._graph:
+            self._graph.query(
+                """
+                MERGE (p:Project {name: $project})
+                MERGE (c:ChatThread {id: $id})
+                SET c.title = $title,
+                    c.project = $project,
+                    c.created_at = $created_at,
+                    c.updated_at = $updated_at,
+                    c.message_count = 0
+                MERGE (p)-[:HAS_CONVERSATION]->(c)
+                """,
+                params={
+                    "id": thread_id,
+                    "title": thread["title"],
+                    "project": project_name,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
+        self._save_local_storage()
+        return thread
+
+    def list_chat_threads(self) -> List[Dict[str, str]]:
+        """Returns chat threads for the active graph space, newest first."""
+        threads = [
+            dict(node.get("properties", {}))
+            for node in self._nodes.values()
+            if node.get("label") == "ChatThread"
+        ]
+        return sorted(
+            threads,
+            key=lambda thread: thread.get("updated_at", ""),
+            reverse=True,
+        )
+
+    def get_chat_thread(self, thread_id: str) -> Optional[Dict[str, Any]]:
+        """Returns a chat thread and its exchanges from the active graph space."""
+        node = self._nodes.get(thread_id)
+        if not node or node.get("label") != "ChatThread":
+            return None
+        exchanges = []
+        for edge in self._edges:
+            if edge.get("source") != thread_id or edge.get("type") != "HAS_EXCHANGE":
+                continue
+            exchange_node = self._nodes.get(edge.get("target", ""), {})
+            if exchange_node.get("label") == "Conversation":
+                exchanges.append(dict(exchange_node.get("properties", {})))
+        exchanges.sort(key=lambda exchange: exchange.get("created_at", ""))
+        return {
+            **node.get("properties", {}),
+            "exchanges": exchanges,
+        }
+
+    def list_recent_chat_exchanges(
+        self,
+        exclude_conversation_id: Optional[str] = None,
+        limit: int = 8,
+    ) -> List[Dict[str, str]]:
+        """Returns recent saved exchanges from other threads in the active space."""
+        bounded_limit = max(0, min(limit, 50))
+        if not bounded_limit:
+            return []
+
+        if self._mode == "falkordb" and self._graph:
+            rows = self._graph.query(
+                """
+                MATCH (exchange:Conversation)
+                WHERE ($exclude_id = '' OR exchange.conversation_id <> $exclude_id)
+                RETURN exchange.project AS project,
+                       exchange.user_message AS user_message,
+                       exchange.assistant_response AS assistant_response,
+                       exchange.session AS session,
+                       exchange.conversation_id AS conversation_id,
+                       exchange.created_at AS created_at
+                ORDER BY exchange.created_at DESC
+                LIMIT $limit
+                """,
+                params={
+                    "exclude_id": exclude_conversation_id or "",
+                    "limit": bounded_limit,
+                },
+            ).result_set
+            return [
+                {
+                    "project": row[0] or "",
+                    "user_message": row[1] or "",
+                    "assistant_response": row[2] or "",
+                    "session": row[3] or "",
+                    "conversation_id": row[4] or "",
+                    "created_at": row[5] or "",
+                }
+                for row in rows
+                if isinstance(row, (list, tuple)) and len(row) >= 6
+            ]
+
+        exchanges = [
+            dict(node.get("properties", {}))
+            for node in self._nodes.values()
+            if node.get("label") == "Conversation"
+            and node.get("properties", {}).get("conversation_id") != exclude_conversation_id
+        ]
+        exchanges.sort(key=lambda exchange: exchange.get("created_at", ""), reverse=True)
+        return exchanges[:bounded_limit]
+
+    def record_conversation(
+        self,
+        project_name: str,
+        user_message: str,
+        assistant_response: str,
+        session_name: str,
+        conversation_id: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Persists a chat exchange and attaches it to its conversation thread."""
+        thread_id = conversation_id
+        if thread_id and self.get_chat_thread(thread_id) is None:
+            raise ValueError("The requested chat conversation does not exist in the active space.")
+        exchange_id = f"conversation_{uuid.uuid4().hex}"
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        project_id = f"project_{self._slugify(project_name)}"
+        session_id = f"session_{self._slugify(session_name)}"
+        properties = {
+            "id": exchange_id,
+            "conversation_id": thread_id or "",
+            "project": project_name,
+            "user_message": user_message,
+            "assistant_response": assistant_response,
+            "session": session_name,
+            "created_at": now,
+        }
+
+        if self._mode == "falkordb" and self._graph:
+            self._graph.query(
+                """
+                MERGE (p:Project {name: $project})
+                MERGE (s:Session {name: $session})
+                MERGE (c:Conversation {id: $id})
+                SET c.project = $project,
+                    c.user_message = $user_message,
+                    c.assistant_response = $assistant_response,
+                    c.session = $session,
+                    c.conversation_id = $conversation_id,
+                    c.created_at = $created_at
+                MERGE (p)-[:HAS_CONVERSATION]->(c)
+                MERGE (c)-[:RECORDED_IN]->(s)
+                """,
+                params={
+                    "project": project_name,
+                    "session": session_name,
+                    "id": exchange_id,
+                    "user_message": user_message,
+                    "assistant_response": assistant_response,
+                    "conversation_id": thread_id or "",
+                    "created_at": now,
+                },
+            )
+
+        self._add_node(project_id, "Project", {"name": project_name, "id": project_id})
+        self._add_node(session_id, "Session", {"name": session_name, "id": session_id})
+        self._add_node(exchange_id, "Conversation", properties)
+        self._add_edge(project_id, exchange_id, "HAS_CONVERSATION")
+        self._add_edge(exchange_id, session_id, "RECORDED_IN")
+        if thread_id:
+            self._add_edge(thread_id, exchange_id, "HAS_EXCHANGE")
+            thread = self._nodes[thread_id]["properties"]
+            exchange_count = int(thread.get("message_count", "0")) + 1
+            thread_title = thread.get("title", "")
+            if exchange_count == 1 and thread_title == "New conversation":
+                thread_title = user_message[:64]
+            thread.update(
+                {
+                    "title": thread_title,
+                    "updated_at": now,
+                    "last_message": user_message[:160],
+                    "message_count": str(exchange_count),
+                }
+            )
+            if self._mode == "falkordb" and self._graph:
+                self._graph.query(
+                    """
+                    MATCH (thread:ChatThread {id: $thread_id})
+                    MATCH (exchange:Conversation {id: $exchange_id})
+                    MERGE (thread)-[:HAS_EXCHANGE]->(exchange)
+                    SET thread.updated_at = $updated_at,
+                        thread.last_message = $last_message,
+                        thread.message_count = $message_count,
+                        thread.title = CASE WHEN thread.title = 'New conversation'
+                                            THEN $title ELSE thread.title END
+                    """,
+                    params={
+                        "thread_id": thread_id,
+                        "exchange_id": exchange_id,
+                        "updated_at": now,
+                        "last_message": user_message[:160],
+                        "message_count": exchange_count,
+                        "title": user_message[:64],
+                    },
+                )
+        self._save_local_storage()
+        return properties
+
+    def search_conversations(
+        self,
+        query: str,
+        project_name: Optional[str] = None,
+    ) -> List[Dict[str, str]]:
+        """Finds saved conversation memories relevant to the query."""
+        terms = self._retrieval_terms(query)
+        if not terms:
+            return []
+
+        if self._mode == "falkordb" and self._graph:
+            graph_query = """
+            MATCH (p:Project)-[:HAS_CONVERSATION]->(c:Conversation)-[:RECORDED_IN]->(s:Session)
+            WHERE ($project = '' OR toLower(p.name) = toLower($project))
+              AND any(term IN $terms WHERE
+                  toLower(c.user_message) CONTAINS term OR
+                  toLower(c.assistant_response) CONTAINS term)
+            RETURN p.name AS project, c.user_message AS user_message,
+                   c.assistant_response AS assistant_response, s.name AS session
+            ORDER BY c.created_at DESC
+            LIMIT 50
+            """
+            rows = self._graph.query(
+                graph_query,
+                params={"project": project_name or "", "terms": terms},
+            ).result_set
+            matches = [
+                {
+                    "project": row[0] or "",
+                    "user_message": row[1] or "",
+                    "assistant_response": row[2] or "",
+                    "session": row[3] or "",
+                }
+                for row in rows
+                if isinstance(row, (list, tuple)) and len(row) >= 4
+            ]
+        else:
+            matches = []
+            for node in self._nodes.values():
+                if node.get("label") != "Conversation":
+                    continue
+                props = node.get("properties", {})
+                if project_name and props.get("project", "").lower() != project_name.lower():
+                    continue
+                matches.append(
+                    {
+                        "project": props.get("project", ""),
+                        "user_message": props.get("user_message", ""),
+                        "assistant_response": props.get("assistant_response", ""),
+                        "session": props.get("session", ""),
+                    }
+                )
+
+        ranked = []
+        for conversation in matches:
+            user_terms = set(self._retrieval_terms(conversation.get("user_message", "")))
+            assistant_terms = set(self._retrieval_terms(conversation.get("assistant_response", "")))
+            score = sum(2 for term in terms if term in user_terms)
+            score += sum(1 for term in terms if term in assistant_terms)
+            if score >= 2:
+                ranked.append((score, conversation))
+        ranked.sort(key=lambda match: match[0], reverse=True)
+        return [conversation for _, conversation in ranked[:10]]
 
     # -------------------------------------------------------------
     # STRUCTURED CUSTOM MEMORY SAVE (FOR UI & APIS)
@@ -703,31 +993,38 @@ class MemoryStore:
         if self._mode == "falkordb" and self._graph:
             query = """
             MATCH (project:Project)-[:HAS_INCIDENT]->(issue:Error)-[:RESOLVED_BY]->(fix:Solution)-[:RECORDED_IN]->(session:Session)
-            WHERE toLower(project.name) CONTAINS toLower($term)
-               OR toLower(issue.title) CONTAINS toLower($term)
-               OR toLower(fix.summary) CONTAINS toLower($term)
-               OR toLower(issue.evidence) CONTAINS toLower($term)
+            WHERE any(term IN $terms WHERE
+                  toLower(issue.title) CONTAINS term
+                  OR toLower(fix.summary) CONTAINS term
+                  OR toLower(issue.evidence) CONTAINS term)
             RETURN project.name AS project, issue.title AS issue, fix.summary AS fix, session.name AS session, issue.evidence AS evidence
-            ORDER BY project.name, session.name
-            LIMIT 5
+            ORDER BY session.name DESC
+            LIMIT 50
             """
-            params = {"term": question}
+            params = {"terms": self._retrieval_terms(question)}
             try:
                 rows = self._graph.query(query, params=params).result_set
                 results = []
+                query_terms = self._retrieval_terms(question)
                 for row in rows:
                     if isinstance(row, (list, tuple)) and len(row) >= 5:
-                        results.append(
-                            {
-                                "project": row[0],
-                                "issue": row[1],
-                                "fix": row[2],
-                                "session": row[3],
-                                "evidence": row[4],
-                            }
-                        )
+                        candidate = {
+                            "project": row[0],
+                            "issue": row[1],
+                            "fix": row[2],
+                            "session": row[3],
+                            "evidence": row[4],
+                        }
+                        issue_terms = set(self._retrieval_terms(candidate["issue"] or ""))
+                        fix_terms = set(self._retrieval_terms(candidate["fix"] or ""))
+                        evidence_terms = set(self._retrieval_terms(candidate["evidence"] or ""))
+                        score = sum(3 for term in query_terms if term in issue_terms)
+                        score += sum(1 for term in query_terms if term in fix_terms | evidence_terms)
+                        if score >= 3:
+                            results.append((score, candidate))
                 if results:
-                    return results
+                    results.sort(key=lambda match: match[0], reverse=True)
+                    return [candidate for _, candidate in results[:5]]
             except Exception:
                 pass
 
@@ -742,9 +1039,17 @@ class MemoryStore:
         Full graph multi-hop retrieval: finds incidents, resolutions, decisions,
         tasks, and formats them into structured Answer Evidence.
         """
-        incidents = self.search(query)
-        decisions = self.get_decisions(project_name)
+        query_terms = set(self._retrieval_terms(query))
+        decision_intent = bool(
+            query_terms
+            & {"decision", "decided", "choice", "bundler", "architecture", "strategy"}
+        )
+        incidents = [] if decision_intent else self.search(query)
+        decisions = self.get_decisions(project_name) if decision_intent else []
         tasks = self.get_tasks(project_name)
+        conversations = (
+            [] if incidents or decisions else self.search_conversations(query, project_name)
+        )
 
         evidence_items: List[MemoryEvidence] = []
 
@@ -790,18 +1095,33 @@ class MemoryStore:
                     )
                 )
 
+        for conversation in conversations:
+            evidence_items.append(
+                MemoryEvidence(
+                    source_type="Project",
+                    source_name=conversation.get("project", "Unknown"),
+                    relation="HAS_CONVERSATION -> RECORDED_IN",
+                    target_type="Conversation",
+                    target_name=conversation.get("user_message", "Saved conversation")[:120],
+                    session=conversation.get("session", ""),
+                    confidence=0.9,
+                    notes=f"Saved assistant response: {conversation.get('assistant_response', '')}",
+                )
+            )
+
         return {
             "incidents": incidents,
             "decisions": decisions,
             "tasks": tasks,
+            "conversations": conversations,
             "evidence": evidence_items,
             "active_space": self.active_space,
         }
 
     def _search_local_incidents(self, question: str) -> List[Dict[str, str]]:
         """Traverses local node/edge graph to find matching incident-solution paths."""
-        search_terms = self._normalize(question).split()
-        matches: List[Dict[str, str]] = []
+        search_terms = self._retrieval_terms(question)
+        matches: List[tuple[int, Dict[str, str]]] = []
 
         for edge in self._edges:
             if edge["type"] == "RESOLVED_BY":
@@ -837,16 +1157,18 @@ class MemoryStore:
                     "evidence": evidence_text,
                 }
 
-                haystack = self._normalize(
-                    f"{project_name} {issue_title} {fix_summary} {session_name} {evidence_text}"
-                )
-
-                score = sum(1 for term in search_terms if len(term) > 2 and term in haystack)
-                if score > 0 or not search_terms:
-                    matches.append(candidate)
+                issue_terms = set(self._retrieval_terms(issue_title))
+                fix_terms = set(self._retrieval_terms(fix_summary))
+                evidence_terms = set(self._retrieval_terms(evidence_text))
+                score = sum(3 for term in search_terms if term in issue_terms)
+                score += sum(1 for term in search_terms if term in fix_terms)
+                score += sum(1 for term in search_terms if term in evidence_terms)
+                if score >= 3:
+                    matches.append((score, candidate))
 
         if matches:
-            return matches
+            matches.sort(key=lambda match: match[0], reverse=True)
+            return [candidate for _, candidate in matches[:5]]
 
         if search_terms:
             return []
@@ -866,6 +1188,25 @@ class MemoryStore:
                     }
                 )
         return fallback_list
+
+    @staticmethod
+    def _retrieval_terms(text: str) -> List[str]:
+        """Tokenizes queries consistently and drops common conversational filler."""
+        stop_words = {
+            "about", "after", "again", "and", "are", "did", "does", "for", "from",
+            "have", "help", "how", "into", "last", "make", "memory", "need", "our",
+            "please", "project", "remember", "that", "the", "then", "there", "this",
+            "week", "what", "when", "where", "which", "with", "would", "you", "your",
+            "can", "could", "was", "were", "will", "would", "has", "had", "user",
+            "tell", "started", "starting", "mention", "mentioned", "three", "weeks",
+        }
+        aliases = {"startup": "start", "failed": "fail", "failure": "fail"}
+        terms = re.findall(r"[a-z0-9]+", str(text).lower())
+        return [
+            aliases.get(term, term)
+            for term in terms
+            if len(term) > 2 and term not in stop_words
+        ]
 
     # -------------------------------------------------------------
     # GRAPH VISUALIZATION EXPORT
@@ -887,6 +1228,8 @@ class MemoryStore:
             "Decision": "#fbbf24", # Amber
             "Task": "#06b6d4",     # Cyan
             "Agent": "#ec4899",    # Pink
+            "ChatThread": "#8b5cf6",  # Violet
+            "Conversation": "#f472b6",  # Pink
             "User": "#94a3b8",     # Slate
         }
 
@@ -897,6 +1240,11 @@ class MemoryStore:
             name = (
                 props.get("name")
                 or props.get("title")
+                or (
+                    props.get("user_message", "")[:64]
+                    if lbl == "Conversation"
+                    else ""
+                )
                 or props.get("summary")
                 or props.get("id")
                 or nid
