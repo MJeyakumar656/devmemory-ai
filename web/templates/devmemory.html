@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevMemory AI & MediMemory AI — Persistent Knowledge Graph Teammate (FalkorDB Track 2)</title>
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-surface: #151e2e;
+      --bg-card: #1e293b;
+      --bg-card-hover: #26354a;
+      --border-color: #2e3e56;
+      --border-highlight: #3b82f6;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-blue: #38bdf8;
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-purple: #c084fc;
+      --accent-red: #f87171;
+      --accent-pink: #f472b6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* TOP HEADER */
+    header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 50;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .logo-badge {
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      color: #0b0f19;
+      font-weight: 900;
+      font-size: 1.25rem;
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.35);
+    }
+    .title-group { display: flex; flex-direction: column; }
+    .title { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
+    .subtitle { font-size: 0.78rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+
+    .header-center { display: flex; align-items: center; gap: 10px; }
+    .space-selector-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 4px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+    }
+    .space-select {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.88rem;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .status-pill {
+      font-size: 0.78rem;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-live { background: #064e3b; color: #34d399; border: 1px solid #059669; }
+    .status-local { background: #1e3a8a; color: #60a5fa; border: 1px solid #2563eb; }
+
+    .btn {
+      padding: 8px 14px;
+      border-radius: 7px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease-in-out;
+      border: none;
+    }
+    .btn-primary { background: var(--accent-blue); color: #0b0f19; }
+    .btn-primary:hover { background: #7dd3fc; }
+    .btn-success { background: var(--accent-emerald); color: #0b0f19; }
+    .btn-success:hover { background: #6ee7b7; }
+    .btn-secondary { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); }
+    .btn-secondary:hover { background: var(--bg-card-hover); }
+
+    /* HOW IT WORKS BANNER */
+    .workflow-banner {
+      background: linear-gradient(90deg, #10192b 0%, #172439 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+    .stepper-flow { display: flex; align-items: center; gap: 12px; }
+    .step-item { display: flex; align-items: center; gap: 6px; }
+    .step-number {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--accent-blue);
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .step-arrow { color: var(--text-muted); font-size: 0.8rem; }
+
+    /* TABS */
+    .tabs-bar {
+      display: flex;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 24px;
+      gap: 8px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      padding: 11px 18px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active {
+      color: var(--accent-blue);
+      border-bottom-color: var(--accent-blue);
+    }
+
+    /* MAIN VIEW CONTAINER */
+    main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+    .screen-container {
+      display: none;
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+    .screen-container.active { display: flex; gap: 20px; }
+
+    /* SCREEN 1: CHAT */
+    .chat-layout { display: flex; width: 100%; height: 100%; gap: 20px; }
+    .chat-main {
+      flex: 3;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .chat-message {
+      max-width: 82%;
+      padding: 14px 18px;
+      border-radius: 12px;
+      line-height: 1.55;
+      font-size: 0.94rem;
+    }
+    .msg-user {
+      align-self: flex-end;
+      background: #1d4ed8;
+      color: white;
+      border-bottom-right-radius: 2px;
+    }
+    .msg-ai {
+      align-self: flex-start;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-bottom-left-radius: 2px;
+    }
+    .msg-evidence-box {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 3px solid var(--accent-blue);
+      border-radius: 0 6px 6px 0;
+      font-size: 0.85rem;
+    }
+    .chat-input-bar {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      display: flex;
+      gap: 12px;
+    }
+    .chat-input {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      outline: none;
+    }
+    .chat-input:focus { border-color: var(--accent-blue); }
+    .chat-side { flex: 1.2; display: flex; flex-direction: column; gap: 16px; }
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .card-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .prompt-chip {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 9px 12px;
+      border-radius: 7px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-bottom: 8px;
+      text-align: left;
+      width: 100%;
+      line-height: 1.35;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .prompt-chip:hover { background: var(--bg-card-hover); border-color: var(--accent-blue); }
+
+    /* SCREEN 2: GRAPH EXPLORER */
+    .graph-layout { display: flex; width: 100%; height: 100%; gap: 20px; }
+    .graph-canvas-container {
+      flex: 2.2;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .graph-toolbar {
+      padding: 10px 16px;
+      background: rgba(30, 41, 59, 0.6);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+    .legend-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 4px; font-size: 0.78rem; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    #graphCanvas { width: 100%; height: 100%; flex: 1; }
+    .graph-info-panel {
+      flex: 1.1;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+    }
+    .node-detail-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.88rem;
+    }
+
+    /* SCREEN 3: AGENT ACTIVITY */
+    .activity-layout { display: flex; width: 100%; height: 100%; gap: 20px; }
+    .kanban-col {
+      flex: 1.2;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+    }
+    .task-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--accent-blue);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.88rem;
+    }
+    .activity-feed-col {
+      flex: 1.5;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+      overflow-y: auto;
+    }
+    .log-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+    .log-agent { font-weight: 700; color: var(--accent-blue); }
+
+    /* SCREEN 4: ANSWER EVIDENCE */
+    .evidence-layout { display: flex; flex-direction: column; width: 100%; gap: 16px; overflow-y: auto; }
+    .evidence-row {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--accent-emerald);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    /* MODALS */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(11, 15, 25, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      width: 520px;
+      max-width: 90vw;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      animation: modalFadeIn 0.15s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title { font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.4rem; cursor: pointer; }
+    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
+    .form-input, .form-select, .form-textarea {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent-blue); }
+    .modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border-color);
+      background: rgba(30, 41, 59, 0.4);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <header>
+    <div class="header-left">
+      <div class="logo-badge">🧠</div>
+      <div class="title-group">
+        <div class="title">DevMemory AI</div>
+        <div class="subtitle">Persistent Knowledge Graph Teammate · FalkorDB Track 2</div>
+      </div>
+    </div>
+
+    <div class="header-center">
+      <!-- MEMORY SPACE SELECTOR -->
+      <div class="space-selector-box">
+        <span style="color:var(--accent-blue);">🌐 Space:</span>
+        <select id="spaceSelector" class="space-select" onchange="onSpaceChange(this.value)">
+          <option value="default">Default Workspace</option>
+        </select>
+        <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.78rem;" onclick="openNewSpaceModal()">
+          + New Space
+        </button>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div id="backendPill" class="status-pill status-local">● Checking Backend...</div>
+      <!-- SAVE MEMORY BUTTON -->
+      <button class="btn btn-success" onclick="openSaveMemoryModal()">
+        💾 Save Memory
+      </button>
+      <button class="btn btn-secondary" onclick="resetMemory()">
+        🔄 Reset
+      </button>
+    </div>
+  </header>
+
+  <!-- HOW IT WORKS BANNER -->
+  <div class="workflow-banner">
+    <div class="stepper-flow">
+      <span style="font-weight:700; color:var(--text-primary);">HOW DEVMEMORY WORKS:</span>
+      <div class="step-item"><span class="step-number">1</span> Developer Query / Fix</div>
+      <span class="step-arrow">➔</span>
+      <div class="step-item"><span class="step-number">2</span> FalkorDB Graph Traversal</div>
+      <span class="step-arrow">➔</span>
+      <div class="step-item"><span class="step-number">3</span> Multi-Agent Reasoning</div>
+      <span class="step-arrow">➔</span>
+      <div class="step-item"><span class="step-number">4</span> Evidence Answer & Persist</div>
+    </div>
+    <div style="font-size:0.75rem; color:var(--text-muted);">
+      Active Space: <b id="activeSpaceLabel" style="color:var(--accent-blue);">default</b>
+    </div>
+  </div>
+
+  <!-- NAVIGATION TABS -->
+  <nav class="tabs-bar">
+    <button class="tab-btn active" onclick="switchTab('screenChat', this)">💬 AI Chat</button>
+    <button class="tab-btn" onclick="switchTab('screenGraph', this)">🕸️ Graph Memory Explorer</button>
+    <button class="tab-btn" onclick="switchTab('screenActivity', this)">🤖 Agent Activity & Handoffs</button>
+    <button class="tab-btn" onclick="switchTab('screenEvidence', this)">🔍 Answer Evidence & Citations</button>
+  </nav>
+
+  <!-- TAB CONTENT SCREENS -->
+  <main>
+    <!-- SCREEN 1: AI CHAT -->
+    <div id="screenChat" class="screen-container active">
+      <div class="chat-layout">
+        <div class="chat-main">
+          <div id="chatMessages" class="chat-messages">
+            <div class="chat-message msg-ai">
+              👋 <b>Welcome to DevMemory AI!</b><br>
+              I am your persistent coding teammate connected to <b>FalkorDB</b>.<br>
+              I remember bugs, fixes, sessions, and architectural decisions across days and weeks.<br><br>
+              Try asking: <i>"My React project had a Vite startup error last week. What did we do to fix it?"</i> or record a new fix with the <b>💾 Save Memory</b> button above.
+            </div>
+          </div>
+          <form class="chat-input-bar" onsubmit="handleSend(event)">
+            <input type="text" id="chatInput" class="chat-input" placeholder="Ask a question, continue an earlier task, or record a fix..." autocomplete="off">
+            <button type="submit" class="btn btn-primary" style="padding:12px 22px;">Send</button>
+          </form>
+        </div>
+        <div class="chat-side">
+          <div class="card">
+            <div class="card-title">
+              <span>Quick Demo Prompts</span>
+              <span style="font-size:0.7rem; color:var(--accent-blue);">Click to Test</span>
+            </div>
+            <button class="prompt-chip" onclick="fillPrompt('My React project had a Vite startup error last week. What did we do to fix it?')">
+              🐞 <b>Vite Startup Error</b><br>
+              <span style="font-size:0.75rem; color:var(--text-secondary);">Query historical port collision fix from Session Oct 12</span>
+            </button>
+            <button class="prompt-chip" onclick="fillPrompt('What bundler decision did we make for Job Portal?')">
+              📐 <b>Active vs Superseded Decision</b><br>
+              <span style="font-size:0.75rem; color:var(--text-secondary);">Notice Vite replacing legacy Webpack via [:SUPERSEDES]</span>
+            </button>
+            <button class="prompt-chip" onclick="fillPrompt('We resolved the React hydration error by adding suppressHydrationWarning to layout.tsx in Session Oct 18.')">
+              💾 <b>Natural Language Record</b><br>
+              <span style="font-size:0.75rem; color:var(--text-secondary);">Extracts bug & fix directly into FalkorDB graph</span>
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Active Project Scope</div>
+            <select id="projectSelect" class="form-select" style="width:100%;">
+              <option value="Job Portal">Job Portal (React + Vite)</option>
+              <option value="E-Commerce API">E-Commerce API (Node.js)</option>
+              <option value="Auth Service">Auth Service (FastAPI)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: GRAPH MEMORY EXPLORER -->
+    <div id="screenGraph" class="screen-container">
+      <div class="graph-layout">
+        <div class="graph-canvas-container">
+          <div class="graph-toolbar">
+            <div class="legend-chips">
+              <span class="legend-item"><span class="legend-dot" style="background:#38bdf8;"></span> Project</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#f87171;"></span> Error</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#34d399;"></span> Solution</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#a855f7;"></span> Session</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#fbbf24;"></span> Decision</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#06b6d4;"></span> Task</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#f472b6;"></span> Agent</span>
+            </div>
+            <span style="color:var(--text-muted);">Click any node to inspect properties</span>
+          </div>
+          <canvas id="graphCanvas"></canvas>
+        </div>
+
+        <div class="graph-info-panel">
+          <div class="card-title">Node Inspector</div>
+          <div id="selectedNodeDetails" class="node-detail-card">
+            <span style="color:var(--text-muted);">Select any graph node on the left to view its Cypher properties and relationships.</span>
+          </div>
+
+          <div class="card-title" style="margin-top:14px;">All Nodes in Active Space</div>
+          <div id="graphNodeList" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: AGENT ACTIVITY -->
+    <div id="screenActivity" class="screen-container">
+      <div class="activity-layout">
+        <div class="kanban-col">
+          <div class="card-title">Multi-Agent Task Board</div>
+          <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="triggerWorkflow()">
+            🚀 Run Diagnostic & Handoff Workflow
+          </button>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">
+            Simulates: Coordinator ➔ Bug Investigator ➔ Code Fixer
+          </div>
+          <div id="taskCardsList" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        <div class="activity-feed-col">
+          <div class="card-title">Real-Time Multi-Agent Activity Stream</div>
+          <div id="activityLogsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: ANSWER EVIDENCE -->
+    <div id="screenEvidence" class="screen-container">
+      <div class="evidence-layout">
+        <div class="card-title">Verified Graph Citations & Provenance</div>
+        <div style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:10px;">
+          Every answer produced by DevMemory AI is grounded in verifiable relationships from FalkorDB.
+        </div>
+        <div id="evidenceList"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== MODAL 1: SAVE MEMORY ==================== -->
+  <div id="modalSaveMemory" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">💾 Save Knowledge to FalkorDB</div>
+        <button class="modal-close" onclick="closeSaveMemoryModal()">&times;</button>
+      </div>
+      <form onsubmit="handleSaveMemory(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Memory Category</label>
+            <select id="saveMemType" class="form-select" onchange="onMemoryTypeChange(this.value)">
+              <option value="incident">🐞 Bug Fix / Incident Resolution</option>
+              <option value="decision">📐 Architectural / Technical Decision</option>
+              <option value="task">📋 Collaborative Task</option>
+              <option value="fact">💡 Technical Fact / Note</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Project Name</label>
+            <input type="text" id="saveProject" class="form-input" value="Job Portal" required>
+          </div>
+
+          <div class="form-group">
+            <label id="lblTitle" class="form-label">Issue / Error Title</label>
+            <input type="text" id="saveTitle" class="form-input" placeholder="e.g. Vite failed to start" required>
+          </div>
+
+          <div class="form-group">
+            <label id="lblDetails" class="form-label">Resolution / Solution Steps</label>
+            <textarea id="saveDetails" class="form-textarea" rows="3" placeholder="e.g. Stop conflicting process on port 5173" required></textarea>
+          </div>
+
+          <div id="fieldSupersedes" class="form-group" style="display:none;">
+            <label class="form-label">Replaces Old Decision (Optional [:SUPERSEDES])</label>
+            <input type="text" id="saveSupersedes" class="form-input" placeholder="e.g. Use Webpack Bundler">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Session / Date Anchor</label>
+            <input type="text" id="saveSession" class="form-input" value="Session Oct 18">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Evidence / Root Cause Notes</label>
+            <input type="text" id="saveEvidence" class="form-input" placeholder="e.g. Stale background process held socket port 5173">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeSaveMemoryModal()">Cancel</button>
+          <button type="submit" class="btn btn-success">Save to Graph</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 2: CREATE MEMORY SPACE ==================== -->
+  <div id="modalNewSpace" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">🌐 Create New Memory Space</div>
+        <button class="modal-close" onclick="closeNewSpaceModal()">&times;</button>
+      </div>
+      <form onsubmit="handleCreateSpace(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Space Name</label>
+            <input type="text" id="newSpaceName" class="form-input" placeholder="e.g. Mobile App, Payment Gateway" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea id="newSpaceDesc" class="form-textarea" rows="2" placeholder="Describe the purpose or repository of this memory space"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeNewSpaceModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Space</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let graphData = { nodes: [], links: [] };
+    let selectedNode = null;
+
+    function switchTab(screenId, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.screen-container').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(screenId).classList.add('active');
+      if (screenId === 'screenGraph') renderGraphCanvas();
+      if (screenId === 'screenActivity') loadTasksAndLogs();
+      if (screenId === 'screenEvidence') loadEvidence();
+    }
+
+    function fillPrompt(text) {
+      document.getElementById('chatInput').value = text;
+      handleSend(new Event('submit'));
+    }
+
+    async function handleSend(e) {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      const container = document.getElementById('chatMessages');
+      container.innerHTML += `<div class="chat-message msg-user">${escapeHtml(text)}</div>`;
+      container.scrollTop = container.scrollHeight;
+
+      try {
+        const res = await fetch('/api/devmemory/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            project: document.getElementById('projectSelect').value,
+            session: 'Session Oct 18'
+          })
+        });
+        const data = await res.json();
+        let evidenceHtml = '';
+        if (data.evidence && data.evidence.length > 0) {
+          evidenceHtml = `<div class="msg-evidence-box"><b>🔍 FalkorDB Evidence:</b><br>` +
+            data.evidence.map(ev => `[${ev.source_type}: ${ev.source_name}] → [${ev.relation}] → [${ev.target_name}] (Session: ${ev.session})`).join('<br>') +
+            `</div>`;
+        }
+        container.innerHTML += `<div class="chat-message msg-ai">${formatMarkdown(data.response)}${evidenceHtml}</div>`;
+        container.scrollTop = container.scrollHeight;
+        loadGraphData();
+      } catch (err) {
+        container.innerHTML += `<div class="chat-message msg-ai" style="color:var(--accent-red);">Failed to reach DevMemory backend.</div>`;
+      }
+    }
+
+    // MODAL: SAVE MEMORY
+    function openSaveMemoryModal() {
+      document.getElementById('modalSaveMemory').classList.add('active');
+    }
+    function closeSaveMemoryModal() {
+      document.getElementById('modalSaveMemory').classList.remove('active');
+    }
+
+    function onMemoryTypeChange(val) {
+      const fieldSup = document.getElementById('fieldSupersedes');
+      const lblTitle = document.getElementById('lblTitle');
+      const lblDetails = document.getElementById('lblDetails');
+      if (val === 'decision') {
+        fieldSup.style.display = 'flex';
+        lblTitle.innerText = 'Decision Title (e.g. Use Vite Bundler)';
+        lblDetails.innerText = 'Rationale / Reason';
+      } else if (val === 'task') {
+        fieldSup.style.display = 'none';
+        lblTitle.innerText = 'Task Title';
+        lblDetails.innerText = 'Task Description';
+      } else {
+        fieldSup.style.display = 'none';
+        lblTitle.innerText = 'Issue / Error Title';
+        lblDetails.innerText = 'Resolution / Solution Steps';
+      }
+    }
+
+    async function handleSaveMemory(e) {
+      e.preventDefault();
+      const payload = {
+        memory_type: document.getElementById('saveMemType').value,
+        project: document.getElementById('saveProject').value,
+        title: document.getElementById('saveTitle').value,
+        details: document.getElementById('saveDetails').value,
+        supersedes: document.getElementById('saveSupersedes').value || null,
+        session: document.getElementById('saveSession').value || 'Session Oct 18',
+        evidence: document.getElementById('saveEvidence').value || ''
+      };
+
+      try {
+        const res = await fetch('/api/devmemory/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        closeSaveMemoryModal();
+        alert(`Memory Saved to FalkorDB!\n${data.data.summary}`);
+        loadGraphData();
+        loadEvidence();
+      } catch (err) {
+        alert('Failed to save memory');
+      }
+    }
+
+    // MODAL: CREATE SPACE
+    function openNewSpaceModal() {
+      document.getElementById('modalNewSpace').classList.add('active');
+    }
+    function closeNewSpaceModal() {
+      document.getElementById('modalNewSpace').classList.remove('active');
+    }
+
+    async function handleCreateSpace(e) {
+      e.preventDefault();
+      const name = document.getElementById('newSpaceName').value.trim();
+      const desc = document.getElementById('newSpaceDesc').value.trim();
+      if (!name) return;
+
+      try {
+        const res = await fetch('/api/devmemory/spaces/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, description: desc })
+        });
+        const data = await res.json();
+        closeNewSpaceModal();
+        await loadSpaces();
+        await loadGraphData();
+        alert(`Memory Space '${name}' created and activated!`);
+      } catch (err) {
+        alert('Failed to create space');
+      }
+    }
+
+    async function onSpaceChange(spaceId) {
+      try {
+        await fetch('/api/devmemory/spaces/switch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ space: spaceId })
+        });
+        document.getElementById('activeSpaceLabel').innerText = spaceId;
+        loadGraphData();
+        loadTasksAndLogs();
+        loadEvidence();
+      } catch (err) {}
+    }
+
+    async function loadSpaces() {
+      try {
+        const res = await fetch('/api/devmemory/spaces');
+        const data = await res.json();
+        const sel = document.getElementById('spaceSelector');
+        sel.innerHTML = data.spaces.map(s => `
+          <option value="${s.id}" ${s.id === data.active_space ? 'selected' : ''}>
+            ${escapeHtml(s.name)} (${s.node_count} nodes)
+          </option>
+        `).join('');
+        document.getElementById('activeSpaceLabel').innerText = data.active_space;
+      } catch (err) {}
+    }
+
+    async function triggerWorkflow() {
+      try {
+        const res = await fetch('/api/devmemory/workflow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task_title: 'Diagnose & Fix Vite Port 5173 Collision',
+            project: document.getElementById('projectSelect').value,
+            description: 'Check port 5173 and release socket'
+          })
+        });
+        const data = await res.json();
+        alert(`Workflow Executed!\nTask ${data.task_id} resolved by Code Fixer after Bug Investigator diagnostic handoff.`);
+        loadTasksAndLogs();
+        loadGraphData();
+      } catch(err) {
+        alert('Workflow trigger failed');
+      }
+    }
+
+    async function resetMemory() {
+      if (confirm('Reset memory graph for current space?')) {
+        await fetch('/api/devmemory/reset', { method: 'POST' });
+        location.reload();
+      }
+    }
+
+    async function loadGraphData() {
+      try {
+        const res = await fetch('/api/devmemory/graph');
+        graphData = await res.json();
+        const pill = document.getElementById('backendPill');
+        if (graphData.backend_mode === 'falkordb') {
+          pill.className = 'status-pill status-live';
+          pill.innerText = '● FalkorDB Live Engine';
+        } else {
+          pill.className = 'status-pill status-local';
+          pill.innerText = '● Persistent Graph Engine';
+        }
+        renderGraphNodeList();
+        renderGraphCanvas();
+      } catch(e) {}
+    }
+
+    function renderGraphNodeList() {
+      const container = document.getElementById('graphNodeList');
+      if (!container) return;
+      container.innerHTML = graphData.nodes.map(n => `
+        <div onclick="selectNodeById('${n.id}')" style="cursor:pointer; border-left: 4px solid ${n.color}; padding:8px 12px; background:var(--bg-card); border-radius:4px; font-size:0.85rem;">
+          <b>[${n.type}]</b> ${escapeHtml(n.label)}
+        </div>
+      `).join('');
+    }
+
+    function selectNodeById(nodeId) {
+      const n = graphData.nodes.find(item => item.id === nodeId);
+      if (!n) return;
+      selectedNode = n;
+      const details = document.getElementById('selectedNodeDetails');
+      const propsHtml = Object.entries(n.properties)
+        .map(([k, v]) => `<div><b>${escapeHtml(k)}:</b> ${escapeHtml(String(v))}</div>`)
+        .join('');
+      details.innerHTML = `
+        <h4 style="color:${n.color}; margin-bottom:6px;">[${n.type}] ${escapeHtml(n.label)}</h4>
+        <div style="font-size:0.8rem; line-height:1.5;">${propsHtml}</div>
+      `;
+      renderGraphCanvas();
+    }
+
+    function renderGraphCanvas() {
+      const canvas = document.getElementById('graphCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight - 45;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!graphData.nodes || graphData.nodes.length === 0) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('No graph nodes in active space. Use 💾 Save Memory to record your first node!', 40, canvas.height / 2);
+        return;
+      }
+
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = Math.min(centerX, centerY) * 0.72;
+
+      const nodeCoords = {};
+      graphData.nodes.forEach((n, idx) => {
+        const angle = (idx / graphData.nodes.length) * 2 * Math.PI;
+        nodeCoords[n.id] = {
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle),
+          node: n
+        };
+      });
+
+      // Links
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.5;
+      graphData.links.forEach(l => {
+        const s = nodeCoords[l.source];
+        const t = nodeCoords[l.target];
+        if (s && t) {
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(t.x, t.y);
+          ctx.stroke();
+
+          // Link label
+          ctx.fillStyle = '#64748b';
+          ctx.font = '9px sans-serif';
+          const midX = (s.x + t.x) / 2;
+          const midY = (s.y + t.y) / 2;
+          ctx.fillText(l.label, midX - 10, midY);
+        }
+      });
+
+      // Nodes
+      Object.values(nodeCoords).forEach(pt => {
+        const isSelected = selectedNode && selectedNode.id === pt.node.id;
+        ctx.fillStyle = pt.node.color || '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, isSelected ? 18 : 13, 0, 2 * Math.PI);
+        ctx.fill();
+
+        if (isSelected) {
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = isSelected ? 'bold 12px sans-serif' : '11px sans-serif';
+        ctx.fillText(pt.node.label.slice(0, 18), pt.x - 25, pt.y + 24);
+      });
+    }
+
+    async function loadTasksAndLogs() {
+      try {
+        const res = await fetch('/api/devmemory/tasks');
+        const data = await res.json();
+        const cardsCont = document.getElementById('taskCardsList');
+        if (data.tasks.length === 0) {
+          cardsCont.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">No tasks recorded yet in this space.</span>';
+        } else {
+          cardsCont.innerHTML = data.tasks.map(t => `
+            <div class="task-card">
+              <b>${escapeHtml(t.title)}</b><br>
+              <span style="color:var(--text-secondary); font-size:0.8rem;">Status: <b>${t.status.toUpperCase()}</b> | Assigned: ${t.assigned_to}</span>
+            </div>
+          `).join('');
+        }
+
+        const logsCont = document.getElementById('activityLogsList');
+        logsCont.innerHTML = data.logs.slice().reverse().map(l => `
+          <div class="log-item">
+            <span style="color:var(--text-muted);">[${l.timestamp}]</span>
+            <span class="log-agent">${l.agent}</span> — <i>${l.action}</i>: ${escapeHtml(l.details)}
+          </div>
+        `).join('');
+      } catch(e) {}
+    }
+
+    async function loadEvidence() {
+      try {
+        const res = await fetch('/api/devmemory/evidence');
+        const data = await res.json();
+        const cont = document.getElementById('evidenceList');
+        if (data.evidence.length === 0) {
+          cont.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">No evidence records in active space.</span>';
+          return;
+        }
+        cont.innerHTML = data.evidence.map((ev, i) => `
+          <div class="evidence-row">
+            <h4 style="margin-bottom:6px;">Evidence Record #${i+1}</h4>
+            <p><b>Path:</b> <code>(${ev.source_type}: ${ev.source_name})</code> → <code>[:${ev.relation}]</code> → <code>(${ev.target_type}: ${ev.target_name})</code></p>
+            <p><b>Session:</b> ${ev.session || 'N/A'} | <b>Confidence:</b> ${(ev.confidence * 100).toFixed(0)}%</p>
+            <p><b>Notes:</b> ${escapeHtml(ev.notes || '')}</p>
+          </div>
+        `).join('');
+      } catch(e) {}
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function formatMarkdown(str) {
+      if (!str) return '';
+      return escapeHtml(str)
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+        .replace(/\*(.*?)\*/g, '<i>$1</i>')
+        .replace(/\n/g, '<br>');
+    }
+
+    // Init
+    loadSpaces();
+    loadGraphData();
+  </script>
+</body>
+</html>

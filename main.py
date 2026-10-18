@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 import sys
 import uvicorn
 from demo import run_milestone_demo
@@ -8,12 +10,17 @@ from demo import run_milestone_demo
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="MediMemory AI — A Persistent Health Companion (FalkorDB Track 2)"
+        description="DevMemory AI — Persistent Knowledge Graph Teammate (FalkorDB Track 2)"
     )
     parser.add_argument(
         "--cli",
         action="store_true",
-        help="Run the terminal milestone demonstration instead of the web server",
+        help="Run the terminal milestone demonstration (Milestones 1-5)",
+    )
+    parser.add_argument(
+        "--streamlit",
+        action="store_true",
+        help="Launch the Streamlit user interface",
     )
     parser.add_argument(
         "--host",
@@ -31,9 +38,16 @@ def main() -> None:
 
     if args.cli:
         run_milestone_demo()
+    elif args.streamlit:
+        print("Launching DevMemory AI Streamlit Dashboard...")
+        subprocess.run([sys.executable, "-m", "streamlit", "run", "streamlit_app.py"])
     else:
-        print(f"Starting MediMemory AI web dashboard at http://{args.host}:{args.port}")
-        print("Tip: Pass --cli to run the terminal multi-agent demonstration instead.")
+        print("=" * 70)
+        print("  DevMemory AI — Persistent Knowledge Graph Teammate")
+        print(f"  Web Dashboard running at: http://{args.host}:{args.port}/devmemory")
+        print(f"  API Docs available at:    http://{args.host}:{args.port}/docs")
+        print("  Tip: Pass --cli to run the terminal milestone demo instead.")
+        print("=" * 70)
         uvicorn.run("web.app:app", host=args.host, port=args.port, reload=False)
 
 
