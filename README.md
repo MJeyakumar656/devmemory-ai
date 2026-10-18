@@ -1,23 +1,51 @@
-# MediMemory AI — A Persistent Health Companion
+# DevMemory AI & MediMemory AI — Persistent Graph Teammates
 > **FalkorDB Hackathon (Track 2: AI Agents with Persistent Memory)**  
-> *Connecting health events across weeks and months using FalkorDB graph memory, multi-agent coordination, temporal reasoning, and deterministic clinical safety guardrails.*
+> *Two graph-memory experiences: a persistent developer teammate and a safety-focused health companion.*
 
 ---
 
 ## 🌟 Overview
 
-Conventional healthcare chatbots suffer from a critical limitation: **statelessness**. When a user reports a symptom today, the AI has forgotten what the user reported three weeks ago. Standard vector databases merely compute semantic similarity, completely missing chronological order, causal distinctions, and relationship graphs.
+This project demonstrates how persistent graph memory can carry useful context between sessions. It includes two experiences:
 
-**MediMemory AI** turns **FalkorDB** into the persistent cognitive backbone of a safe, multi-agent personal health companion. It remembers lifestyle changes, dietary shifts, medications, and symptoms across weeks or months, using graph reasoning to explore potential connections while strictly adhering to evidence-based medical safety.
+- **DevMemory AI** remembers project conversations, bug fixes, and architectural decisions, and connects them to projects, sessions, and evidence in a graph.
+- **MediMemory AI** remembers health events and their timing, and provides cautious, evidence-informed guidance with explicit safety guardrails.
+
+Both use FalkorDB when available and support local JSON graph persistence as a fallback. The default browser route opens DevMemory AI; MediMemory AI is available at `/medimemory`.
+
+## 💬 DevMemory AI
+
+DevMemory is the main application at `http://127.0.0.1:8000/`. It provides an AI chat backed by graph memory, with graph exploration, answer evidence, and agent activity views.
+
+### Persistent conversations and spaces
+
+- The chat opens with a greeting and lets you start a new conversation or continue an earlier one.
+- Exchanges are saved as graph nodes connected to their chat thread, project, and session.
+- Follow-up chat can use relevant earlier exchanges in the same memory space, including across conversations. Spaces are isolated from one another.
+- The protected `default` space cannot be reset or deleted. New spaces start empty and can be used for separate projects or topics.
+- Bug-fix and architectural-decision statements can be extracted from chat and saved to graph memory. Answers show retrieved evidence when available.
+- The Graph Memory Explorer visualizes connected project memories; Answer Evidence & Citations shows supporting records; Agent Activity & Handoffs surfaces workflow events.
+- When FalkorDB is unavailable, the app uses local JSON persistence.
+
+### Try the persistent-memory flow
+
+1. In one conversation, tell DevMemory: *“I started a keto diet three weeks ago.”*
+2. Start a new conversation in the same memory space and ask: *“I have a headache. What medicine can I take?”*
+3. DevMemory can recall the earlier statement as potentially relevant context. It should not diagnose “keto flu” or recommend salt water or medication based only on that memory; it should clearly explain uncertainty, suggest checking with a clinician or pharmacist, and identify urgent warning signs.
+
+This example demonstrates context recall, not a medical diagnosis or treatment recommendation. For health-related guidance, see the separate MediMemory AI experience below.
 
 ---
 
-## 📸 Interface Design (Inspired by Modern Clinical UI)
+## 🩺 MediMemory AI — Persistent Health Companion
 
-The user experience features a calming, clinical-grade interface designed after top-tier healthcare UI patterns:
-- **Left Navigation**: Session history, patient timeline, and active FalkorDB backend indicator.
-- **Center Chat Workspace**: AI Scribe status, memory recall indicators ("Preceded by Ketogenic Diet 21 days ago"), interactive **Immediate Relief & Self-Care** table, and clinical action shortcuts.
-- **Right Insights Panel**: Next Steps, non-diagnostic **Condition Possibilities** breakdown (e.g. 42% Dietary Transition / Fluid Shift, 28% Dehydration, 18% Tension-Type), **When to Seek Care** triage timeline, **Assessment Confidence** meter, and a live **FalkorDB Graph Trail Canvas**.
+MediMemory AI is a separate health-oriented experience available at `/medimemory`. It connects health events over time and uses explicit provenance and safety guardrails; temporal order does not establish that one event caused another.
+
+### Interface
+
+- **Left Navigation**: Session history, patient timeline, and active graph-backend indicator.
+- **Center Chat Workspace**: AI Scribe status, memory recall indicators, self-care guidance, and clinical action shortcuts.
+- **Right Insights Panel**: Next steps, non-diagnostic possibilities, care triage, assessment confidence, and a live graph trail.
 
 ---
 
@@ -98,25 +126,24 @@ The developer assistant applies the same five-part cycle to project knowledge:
 ## 🚀 Quick Start
 
 ### 1. Requirements & Setup
-Make sure Python 3.10+ is installed:
+Make sure Python 3.10+ is installed, then install the project dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-*(Optional) Start FalkorDB via Docker if you want the native Redis-based graph server:*
+FalkorDB is optional. To use the graph server instead of the local JSON fallback, start it with Docker:
 ```bash
 docker run -d --name falkordb -p 6379:6379 falkordb/falkordb:latest
 ```
-> *Note: If FalkorDB is not running locally, MediMemory AI automatically uses its robust, persistent graph engine fallback with full Cypher and JSON persistence.*
 
 ### 2. Run the Interactive Web Dashboard
 ```bash
 python main.py
 ```
-Open your browser to: **`http://127.0.0.1:8000`**
+Open **DevMemory AI** at `http://127.0.0.1:8000/` or **MediMemory AI** at `http://127.0.0.1:8000/medimemory`.
 
 ### 3. Run the CLI Terminal Demonstration
-To see the complete multi-agent workflow in the terminal:
+To run the health companion's multi-agent demonstration in the terminal:
 ```bash
 python demo.py
 ```
@@ -129,7 +156,7 @@ pytest -v
 
 ---
 
-## 🎬 Demonstration Flow (The 2-Session Milestone)
+## 🎬 MediMemory Demonstration Flow (The 2-Session Milestone)
 
 1. **Session 1 — Day 1: Remember**
    - User: *"I started a ketogenic diet today."*
@@ -175,7 +202,14 @@ MERGE (a)-[:GROUNDED_IN]->(m);
 ## 📁 Repository Structure
 
 ```
-c:\Graph Hacks\
+repository-root/
+  ├── devmemory/
+  │    ├── memory.py           # FalkorDB/local graph memory and spaces
+  │    ├── schema.py           # Graph models and agent response schemas
+  │    └── agents/
+  │         ├── memory_agent.py    # Extracts and stores project knowledge
+  │         ├── task_agent.py      # Retrieves evidence and answers questions
+  │         └── coordinator.py     # Coordinates chat and agent workflows
   ├── medimemory/
   │    ├── __init__.py
   │    ├── schema.py            # Pydantic graph models & multi-agent state
@@ -188,14 +222,16 @@ c:\Graph Hacks\
   │         ├── safety_agent.py      # Agent 3: Safety & Coordination Agent
   │         └── orchestrator.py      # Multi-Agent StateGraph Coordinator
   ├── web/
-  │    ├── app.py               # FastAPI backend with REST endpoints
+  │    ├── app.py               # FastAPI backend; DevMemory at /, MediMemory at /medimemory
   │    ├── static/
-  │    │    ├── css/style.css   # Pixel-accurate modern healthcare UI styles
-  │    │    └── js/app.js       # Graph canvas, interactive tables, demo runner
+  │    │    ├── css/style.css   # MediMemory dashboard styles
+  │    │    └── js/app.js       # MediMemory graph canvas and dashboard interactions
   │    └── templates/
-  │         └── index.html      # Complete dashboard matching Dribbble inspiration
+  │         ├── devmemory.html  # DevMemory chat, graph, activity, and evidence views
+  │         └── index.html      # MediMemory health companion dashboard
   ├── tests/
-  │    ├── test_medimemory.py   # Unit tests for agents, temporal reasoning & API
+  │    ├── test_devmemory.py    # Developer memory, chat, graph, and API tests
+  │    ├── test_medimemory.py   # Health agents, temporal reasoning, and API tests
   │    └── test_memory.py       # Core memory tests
   ├── demo.py                   # One-click terminal milestone demonstration
   ├── main.py                   # Web dashboard / CLI entrypoint
