@@ -1,14 +1,14 @@
-import json
-import os
 from datetime import datetime
 from pathlib import Path
-import streamlit as st
+
+try:
+    import streamlit as st  # type: ignore[import-not-found]
+except ModuleNotFoundError as exc:
+    raise RuntimeError("Install the app dependencies before running this Streamlit app: pip install streamlit") from exc
 
 from devmemory.agents.coordinator import AgentCoordinator
 from devmemory.agents.memory_agent import MemoryAgent
-from devmemory.agents.task_agent import TaskAgent
 from devmemory.memory import MemoryStore
-from devmemory.schema import TaskStatus
 
 # -------------------------------------------------------------
 # PAGE CONFIGURATION
@@ -196,11 +196,20 @@ with st.sidebar:
             st.session_state.selected_prompt = p
 
     st.markdown("---")
-    if st.button("🔄 Reset Current Space", use_container_width=True):
-        store.reset(clear_persistent_file=True)
+    if st.button(
+        "🔄 Reset Current Space",
+        use_container_width=True,
+        disabled=store.active_space == "default",
+        help="The protected default space cannot be reset."
+        if store.active_space == "default"
+        else None,
+    ):
+        store.reset()
         st.session_state.chat_history = []
         st.success("Space cleared. Reloading...")
         st.rerun()
+    if store.active_space == "default":
+        st.caption("The protected default space cannot be reset.")
 
 # -------------------------------------------------------------
 # MAIN APP HEADER & UNDERSTANDING BANNER
